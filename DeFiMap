@@ -1,0 +1,107 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import requests
+import networkx as nx
+
+class DeFiMap:
+    def __init__(self, api_url: str):
+        self.api_url = api_url
+        self.protocol_data = pd.DataFrame()
+
+    def fetch_protocol_data(self, protocol_id: str) -> dict:
+        """
+        Fetch DeFi protocol data from the API.
+        """
+        url = f"{self.api_url}/protocol/{protocol_id}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            return data
+        else:
+            print(f"Error fetching protocol data: {response.status_code}")
+            return {}
+
+    def fetch_protocol_interactions(self) -> pd.DataFrame:
+        """
+        Fetch interaction data between DeFi protocols.
+        """
+        url = f"{self.api_url}/interactions"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            df = pd.DataFrame(data['interactions'])
+            return df
+        else:
+            print(f"Error fetching protocol interactions: {response.status_code}")
+            return pd.DataFrame()
+
+    def analyze_protocol_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Analyze metrics such as TVL and transaction volumes.
+        """
+        df['tvl'] = df['tvl'].astype(float)
+        df['volume'] = df['volume'].astype(float)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
+        
+        metrics_data = df[['tvl', 'volume']].resample('D').agg({'tvl': 'mean', 'volume': 'sum'})
+        return metrics_data
+
+    def visualize_protocol_metrics(self, df: pd.DataFrame):
+        """
+        Visualize metrics such as TVL and trading volume.
+        """
+        plt.figure(figsize=(14, 7))
+        sns.lineplot(data=df, x=df.index, y='tvl', label='Total Value Locked')
+        plt.title('DeFi Protocol TVL Trend')
+        plt.xlabel('Date')
+        plt.ylabel('TVL')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+        plt.figure(figsize=(14, 7))
+        sns.lineplot(data=df, x=df.index, y='volume', label='Transaction Volume')
+        plt.title('DeFi Protocol Transaction Volume Trend')
+        plt.xlabel('Date')
+        plt.ylabel('Volume')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def visualize_protocol_interactions(self, df: pd.DataFrame):
+        """
+        Visualize interactions between DeFi protocols using a network graph.
+        """
+        G = nx.from_pandas_edgelist(df, source='protocol_from', target='protocol_to', edge_attr='volume')
+        
+        plt.figure(figsize=(12, 12))
+        pos = nx.spring_layout(G, k=0.5, iterations=50)
+        nx.draw(G, pos, with_labels=True, node_size=2000, node_color='skyblue', font_size=10, font_weight='bold', edge_color='gray')
+        edge_labels = nx.get_edge_attributes(G, 'volume')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        plt.title('DeFi Protocol Interactions')
+        plt.show()
+
+# Example usage
+if __name__ == "__main__":
+    api_url = 'https://api.example.com/v1'
+    protocol_id = '0xabcdef1234567890abcdef1234567890abcdef12'
+
+    defi_map = DeFiMap(api_url)
+    
+    # Fetch protocol and interaction data
+    protocol_data = defi_map.fetch_protocol_data(protocol_id)
+    interaction_data = defi_map.fetch_protocol_interactions()
+    
+    # Analyze and visualize protocol metrics
+    if not protocol_data.empty:
+        metrics_df = defi_map.analyze_protocol_metrics(pd.DataFrame([protocol_data]))
+        defi_map.visualize_protocol_metrics(metrics_df)
+    
+    if not interaction_data.empty:
+        defi_map.visualize_protocol_interactions(interaction_data)
+    
+    print("Protocol Data:", protocol_data)
